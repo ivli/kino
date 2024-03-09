@@ -1,3 +1,5 @@
+#pragma once
+
 #include <set>
 #include <vector>
 #include <string>
@@ -21,6 +23,8 @@ struct Mouvie{
     std::string iName;
 };
 
+inline int operator < (const Mouvie& aLhs, const Mouvie& aRhs) {return aLhs.iName < aRhs.iName;}
+inline int operator < (const Cinema& aLhs, const Cinema& aRhs) {return aLhs.iName < aRhs.iName;}
 /**
  * @brief represents a mouvie 
  * in future we might want to add other specialization such as price 
@@ -52,7 +56,7 @@ class BookingClient
 public:
      /// @brief get a list of movies currently available in cinemas 
      /// @return 
-    static std::vector<Mouvie> GetMovieList();
+    static std::vector<Mouvie> GetMouvieList();
 
      /// @brief get a list of cinemas
      /// @return 
@@ -64,21 +68,33 @@ public:
      /// @brief 
      /// @return 
     bool SelectMovie(const Mouvie& aMovie);
-     /// @brief 
+     /// @brief returns a list of available seats for previously set Cinema and Mouvie
      /// @return 
     std::vector<Seat> GetAvailableSeats() const;
-     /// @brief 
-     /// @return 
-    bool BookTickets(unsigned aNumberOfTickets);
-
-    static std::unique_ptr<BookingClient>  New();
-
+     /// @brief actually books tickets
+     /// @param aNumberOfTickets number of tickets to book
+     /// @return see \@EBookingResult
+    EBookingResult BookTickets(unsigned aNumberOfTickets);
+     /// @brief factory method
+     /// @return  new client, bound to a backend
+    static std::unique_ptr<BookingClient> New();
+    /// @brief 
+    ~BookingClient();
 protected:
     BookingClient(const BookingClient&) = delete;
     BookingClient(BookingClientImpl* aImpl);
 private:
-    /// @brief 
-    std::unique_ptr<BookingClientImpl> iImpl;
+    /// @brief  hidden implementation class
+    BookingClientImpl* iImpl=nullptr;
+};
+
+/**
+ * @brief a static class to initialize service 
+ * 
+ */
+class Booking {
+public:
+    static bool Initialize(const std::string& json);
 };
 
 };

@@ -1,2 +1,14 @@
 bin/
 *.o
+*.cmake
+Makefile
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+Testing/
+_deps/
+build/
+kino
+libbooking.a
+test/unittest
+.vscode/

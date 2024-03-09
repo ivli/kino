@@ -4,13 +4,17 @@
 #include <array>
 #include <thread>
 #include <mutex>
+#include <iostream>
 #include "rapidjson/document.h"
  
 using namespace rapidjson;
 
+
 namespace booking {
 
 constexpr size_t KCinemaSize=20; 
+
+
 
 class BookingBackend
 {
@@ -25,28 +29,47 @@ public:
 private:
     std::mutex iOverbookingGuard;
     bool iInitialised = false;
-private: 
+public:
      //TODO: it has to be normalized
-    struct CRecord {
+struct CRecord {
         Cinema iCinema;
         Mouvie iMouvie; //it's better to have index to a movie list
         std::array<Seat, KCinemaSize> iSeats;
     };
-
+private: 
     std::set<CRecord> iRecordSet;
 };
 
+int operator < (const BookingBackend::CRecord& aLhs, const BookingBackend::CRecord& aRhs) {
+    return aLhs.iCinema.iName < aRhs.iCinema.iName;
+}
+
 bool BookingBackend::SerializeIn(const std::string& aJsonFile)
 {
-    static const char* KTypeNames[] = 
-    { "Null", "False", "True", "Object", "Array", "String", "Number" };
-    rapidjson::Document doc;
-    doc.Parse(aJsonFile.c_str());
+    using namespace rapidjson;
 
-    for (auto& m : doc.GetObject())
-        printf("Type of member %s is %s\n",
-            m.name.GetString(), KTypeNames[m.value.GetType()]);
+    std::cout << aJsonFile << std::endl;
 
+    Document doc;
+    ParseResult ok = doc.Parse(aJsonFile.c_str());
+
+    if (!ok) {
+        std::cout << "JSON parse error " << ok.Code() << std::endl;
+        return false;
+    }
+
+    for (auto& cinema : doc.GetObject()) {
+        std::cout <<  cinema.name.GetString() << std::endl;
+
+        if (cinema.value.HasMember("mouvie"))   {
+            auto  a = cinema.value.FindMember("mouvie");
+            if (a->value.IsString())
+                std::cout << a->value.GetString() << std::endl; 
+  
+         
+        iRecordSet.insert({cinema.name.GetString(), a->value.GetString() });
+        } 
+    }
 
     return true;
 }
@@ -54,10 +77,14 @@ bool BookingBackend::SerializeIn(const std::string& aJsonFile)
 std::vector<Mouvie> BookingBackend::GetMouvieList() const
 {
     std::vector<Mouvie> ret;
+    std::set<Mouvie> tmp;
     
      //so stupid :-) if ther's a time it might have sense to implement caching 
     for (auto &rs : iRecordSet)
-        ret.push_back(rs.iMouvie);
+        tmp.insert(rs.iMouvie);
+
+    for (auto &it : tmp)
+        ret.emplace_back(it);
 
     return ret;    
 }
@@ -81,14 +108,16 @@ std::vector<Seat> BookingBackend::GetAvailableSeats(const Cinema& aCinema, const
 
 EBookingResult BookingBackend::BookTickets(unsigned aNumberOfTickets, const Cinema& aCinema, const Mouvie& aMouvie)
 {
-
-
     return EBookingResult::EServerError;
 }
 
 
 static BookingBackend gBackend;
  
+bool Booking::Initialize(const std::string& json)
+{
+    return gBackend.SerializeIn(json);
+}
 
 class BookingClientImpl
 {
@@ -137,6 +166,40 @@ std::unique_ptr<BookingClient> BookingClient::New()
    return std::unique_ptr<BookingClient>(new BookingClient(new BookingClientImpl())); 
 }
 
+BookingClient::~BookingClient()
+{
+    delete iImpl;
+}
+
+std::vector<Mouvie> BookingClient::GetMouvieList() 
+{
+    return gBackend.GetMouvieList();
+}
+
+std::vector<Cinema> BookingClient::GetCinemaList() 
+{
+    return gBackend.GetCinemaList();
+}
+
+bool BookingClient::SelectCinema(const Cinema& aCinema) 
+{
+    return iImpl->SelectCinema(aCinema);
+}
+
+bool BookingClient::SelectMovie(const Mouvie& aMovie)
+{
+    return iImpl->SelectMovie(aMovie);
+}
+
+std::vector<Seat> BookingClient::GetAvailableSeats() const
+{
+    return iImpl->GetAvailableSeats();
+}
+
+EBookingResult BookingClient::BookTickets(unsigned aNumberOfTickets)
+{
+    return iImpl->BookTickets(aNumberOfTickets);
+}
 
 
 };
