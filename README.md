@@ -20,6 +20,12 @@
     5. GET available seats
     6. GET book one or more seats
 
+
+
+building
+
+1. from project root folder >$conan install conanfile.txt --build=missing
+3. cmake . -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=./build/Release/generators/conan_toolchain.cmake -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_BUILD_TYPE=Release
  
 
 

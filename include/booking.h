@@ -29,6 +29,18 @@ struct Seat{
     unsigned iNo;
 };
 
+/// @brief result of booking operation
+enum class EBookingResult
+{
+    ESuccess,    ///seats successfully booked
+    EServerError, ///http 5xx
+    ENoSeatsAvailable, /// no seats available
+    EBadArg,       /// bad argument say wrong number of seats requested
+    ENoSuchMouvie, /// wrong mouvie
+    ENoSuchCinema  /// wrong cinema name
+};
+
+//forward declaration of an implementation class
 class BookingClientImpl;
 
 /**
@@ -60,14 +72,12 @@ public:
     bool BookTickets(unsigned aNumberOfTickets);
 
     static std::unique_ptr<BookingClient>  New();
-    static std::unique_ptr<BookingClient>  New(const Cinema&, const Mouvie&);
 
 protected:
-
-    BookingClient(const BookingClient&);
+    BookingClient(const BookingClient&) = delete;
     BookingClient(BookingClientImpl* aImpl);
 private:
-    /// @brief movie when selected
+    /// @brief 
     std::unique_ptr<BookingClientImpl> iImpl;
 };
 

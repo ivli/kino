@@ -1,9 +1,9 @@
-#include "gtest/gtest.h"
+#include  "gtest/gtest.h"
 
 namespace {
-// Tests the Increment() method.
 
-TEST(Counter, Increment) {
+TEST(Backend, InternalizeJson) {
+
   /**
 
   // Test that counter 0 returns 0
@@ -17,7 +17,7 @@ TEST(Counter, Increment) {
   EXPECT_EQ(2, c.Increment());
 
   EXPECT_EQ(3, c.Decrement());
-  *//
+  */
 }
 
 }  // namespace
