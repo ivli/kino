@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 project(KINO)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (NOT BUILD_TESTING STREQUAL OFF)
@@ -11,7 +11,6 @@ endif()
 
 find_package(RapidJSON REQUIRED)
 target_link_libraries(rapidjson)
-
 
 include_directories(./include)
 set(LIB_INCLUDES include/booking.h)
@@ -24,3 +23,5 @@ add_library(booking STATIC ${LIB_SOURCES})
 target_link_libraries(booking rapidjson)
 
 add_executable(kino ${KINO_SOURCES})
+target_link_libraries(kino booking)
+target_link_libraries(kino rapidjson)

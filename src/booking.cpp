@@ -1,5 +1,6 @@
 #include "booking.h"
 #include <set>
+#include <map>
 #include <unordered_set>
 #include <array>
 #include <thread>
@@ -12,76 +13,88 @@ using namespace rapidjson;
 
 namespace booking {
 
-constexpr size_t KCinemaSize=20; 
-
-
-
+constexpr size_t KTheaterSize=20; 
+/**
+ * @brief backend class, containing memory-based booking table and provides methods to manipulate with
+ * 
+ */
 class BookingBackend
 {
 public:
-    std::vector<Mouvie> GetMouvieList() const;
-    std::vector<Cinema> GetCinemaList() const; 
-    std::vector<Seat> GetAvailableSeats(const Cinema& aCinema, const Mouvie& aMouvie) const;
-    EBookingResult BookTickets(unsigned aNumberOfTickets, const Cinema& aCinema, const Mouvie& aMouvie);
-    bool IsValid(const Cinema& aCinema) const{return true;} //TODO: implement harness
-    bool IsValid(const Mouvie& aMouvie) const{return true;} //TODO: implement harness
+    std::vector<Theater> GetTheaterList(const Movie& aMovie) const; 
+    std::vector<Movie> GetMovieList(const Theater& aTheater) const;
+    std::vector<Seat> GetAvailableSeats(const Theater& aTheater, const Movie& aMovie) const;
+    EBookingResult BookTickets(unsigned aNumberOfTickets, const Theater& aTheater, const Movie& aMovie);
+    bool IsValid(const Theater& aTheater) const{return true;} //TODO: implement harness
+    bool IsValid(const Movie& aMovie) const{return true;} //TODO: implement harness
     bool SerializeIn(const std::string& aJsonFile);
 private:
-    std::mutex iOverbookingGuard;
-    bool iInitialised = false;
+    std::mutex iBookingGuard;
+
 public:
-     //TODO: it has to be normalized
-struct CRecord {
-        Cinema iCinema;
-        Mouvie iMouvie; //it's better to have index to a movie list
-        std::array<Seat, KCinemaSize> iSeats;
-    };
+     //TODO: extract cinema and movie lists upon parsing json and store indexes
+     /// otherwise boost::multiindex might have been used but simple rdbms like sqlite is the best
+    struct CRecord {
+            std::map<Movie, std::array<bool, KTheaterSize>> iShows;
+        };
 private: 
-    std::set<CRecord> iRecordSet;
+     //assume there's no two cinema with the same name
+    std::map<Theater, CRecord> iRecordSet;
 };
 
-int operator < (const BookingBackend::CRecord& aLhs, const BookingBackend::CRecord& aRhs) {
-    return aLhs.iCinema.iName < aRhs.iCinema.iName;
-}
-
-bool BookingBackend::SerializeIn(const std::string& aJsonFile)
+bool BookingBackend::SerializeIn(const std::string& aJson)
 {
     using namespace rapidjson;
 
-    std::cout << aJsonFile << std::endl;
-
     Document doc;
-    ParseResult ok = doc.Parse(aJsonFile.c_str());
+    ParseResult ok = doc.Parse(aJson.c_str());
 
     if (!ok) {
-        std::cout << "JSON parse error " << ok.Code() << std::endl;
+        std::cout << "Failed to parse input data, error code = " << ok.Code() << std::endl;
         return false;
     }
 
-    for (auto& cinema : doc.GetObject()) {
-        std::cout <<  cinema.name.GetString() << std::endl;
+    iRecordSet.clear();
 
-        if (cinema.value.HasMember("mouvie"))   {
-            auto  a = cinema.value.FindMember("mouvie");
-            if (a->value.IsString())
-                std::cout << a->value.GetString() << std::endl; 
-  
-         
-        iRecordSet.insert({cinema.name.GetString(), a->value.GetString() });
+    for (auto& cinema : doc.GetObject()) {
+        if (cinema.value.HasMember("mouvie")) {
+            const auto& a = cinema.value.FindMember("mouvie");
+            if (a->value.IsString()) {
+                CRecord rec;
+                rec.iShows.insert({{a->value.GetString()},{}});
+                iRecordSet.insert({{cinema.name.GetString()}, rec});
+            } else if (a->value.IsArray()) {
+                CRecord rec;
+                for (SizeType i = 0; i < a->value.Size(); ++i)
+                    rec.iShows.insert({{a->value[i].GetString()}, {}});
+                iRecordSet.insert({{cinema.name.GetString()}, rec});
+            } else {
+                //TODO: it looks like JSON has smth unexpected
+            }
         } 
     }
 
     return true;
 }
 
-std::vector<Mouvie> BookingBackend::GetMouvieList() const
+std::vector<Movie> BookingBackend::GetMovieList(const Theater& aTheater) const
 {
-    std::vector<Mouvie> ret;
-    std::set<Mouvie> tmp;
-    
-     //so stupid :-) if ther's a time it might have sense to implement caching 
-    for (auto &rs : iRecordSet)
-        tmp.insert(rs.iMouvie);
+    std::vector<Movie> ret;
+    std::set<Movie>    tmp;
+     
+    if (!aTheater.iName.length()) { 
+        for (auto &rs : iRecordSet) {
+            for (auto &s : rs.second.iShows) {
+                tmp.insert(s.first);
+            }
+        }
+    } else {
+        if(auto rs = iRecordSet.find(aTheater); iRecordSet.end() != rs)
+            for (auto &s : rs->second.iShows) {
+                tmp.insert(s.first);
+            }
+
+    }
 
     for (auto &it : tmp)
         ret.emplace_back(it);
@@ -89,25 +102,64 @@ std::vector<Mouvie> BookingBackend::GetMouvieList() const
     return ret;    
 }
 
-std::vector<Cinema> BookingBackend::GetCinemaList() const
+std::vector<Theater> BookingBackend::GetTheaterList(const Movie& aMovie) const
 {
-    std::vector<Cinema> ret;
-    
-     //so stupid :-) if ther's a time it might have sense to implement caching 
+    std::vector<Theater> ret;
+
     for (auto &rs : iRecordSet)
-        ret.push_back(rs.iCinema);
+        if (!aMovie.iName.length() ||  rs.second.iShows.end() != rs.second.iShows.find(aMovie))
+            ret.push_back(rs.first);
 
     return ret;   
 } 
 
-std::vector<Seat> BookingBackend::GetAvailableSeats(const Cinema& aCinema, const Mouvie& aMouvie) const
+std::vector<Seat> BookingBackend::GetAvailableSeats(const Theater& aTheater, const Movie& aMovie) const
 {
     std::vector<Seat> ret;
+
+    if (auto r = iRecordSet.find(aTheater); iRecordSet.end() != r)
+    {
+        if (auto m = r->second.iShows.find(aMovie); r->second.iShows.end() != m) {
+            for (unsigned i = 0; i < m->second.size(); ++i)
+              if (!m->second[i]) 
+                ret.push_back({i});
+        }
+    }
+
     return ret;
 }
 
-EBookingResult BookingBackend::BookTickets(unsigned aNumberOfTickets, const Cinema& aCinema, const Mouvie& aMouvie)
+EBookingResult BookingBackend::BookTickets(unsigned aNumberOfTickets, const Theater& aTheater, const Movie& aMovie)
 {
+    const std::lock_guard<std::mutex> lock(iBookingGuard); //abit pessimistic but guarantees no race 
+
+    if (auto r = iRecordSet.find(aTheater); iRecordSet.end() != r)
+    {
+        if (auto m = r->second.iShows.find(aMovie); r->second.iShows.end() != m) {
+            size_t cnt = 0;
+             //estimate free seats count, to ensure the entire order can be placed 
+            for (unsigned i = 0; i < m->second.size(); ++i)
+                if (!m->second[i]) 
+                    ++cnt;
+
+            if (aNumberOfTickets > cnt)
+                return EBookingResult::ENoSeatsAvailable;
+
+            cnt = aNumberOfTickets;
+            for (unsigned i = 0; i < m->second.size() && cnt; ++i)
+                if (!m->second[i]) {
+                    m->second[i] = true;
+                    --cnt;
+                }    
+
+            return EBookingResult::ESuccess;
+        } else {
+            return EBookingResult::ENoSuchMovie;
+        }
+    } else {
+        return EBookingResult::ENoSuchTheater;
+    }
+
     return EBookingResult::EServerError;
 }
 
@@ -122,39 +174,40 @@ bool Booking::Initialize(const std::string& json)
 class BookingClientImpl
 {
 public:
+    std::vector<Theater> GetTheaterList() const {return gBackend.GetTheaterList(iMovie);}
 
-    static std::vector<Mouvie> GetMovieList() {return gBackend.GetMouvieList();}
+    std::vector<Movie> GetMovieList() const {return gBackend.GetMovieList(iTheater);}
 
-    static std::vector<Cinema> GetCinemaList() {return gBackend.GetCinemaList();}
-
-    bool SelectCinema(const Cinema& aCinema) {
-        if (!gBackend.IsValid(aCinema))
+    bool SelectTheater(const Theater& aTheater) {
+        if (!gBackend.IsValid(aTheater))
             return false;
-        iCinema=aCinema;
+        iTheater = aTheater;
         return true;
         }
 
-    bool SelectMovie(const Mouvie& aMovie) {
+    bool SelectMovie(const Movie& aMovie) {
         if (!gBackend.IsValid(aMovie))
             return false;
-        iMouvie=aMovie;
+        iMovie = aMovie;
         return true;
         }
 
-    std::vector<Seat> GetAvailableSeats() const {
-        return gBackend.GetAvailableSeats(iCinema, iMouvie);
+    std::vector<Seat> GetAvailableSeats() const 
+    {
+        return gBackend.GetAvailableSeats(iTheater, iMovie);
     }
 
-    EBookingResult BookTickets(unsigned aNumberOfTickets) {
-        return gBackend.BookTickets(aNumberOfTickets, iCinema, iMouvie);
+    EBookingResult BookTickets(unsigned aNumberOfTickets) 
+    {
+        return gBackend.BookTickets(aNumberOfTickets, iTheater, iMovie);
     }
 
 private:
     /// @brief movie when selected
-    Mouvie iMouvie;
+    Movie iMovie;
 
     /// @brief a cinema when selected
-    Cinema iCinema;
+    Theater iTheater;
 
 };
 
@@ -171,22 +224,22 @@ BookingClient::~BookingClient()
     delete iImpl;
 }
 
-std::vector<Mouvie> BookingClient::GetMouvieList() 
+std::vector<Movie> BookingClient::GetMovieList() 
 {
-    return gBackend.GetMouvieList();
+    return iImpl->GetMovieList();
 }
 
-std::vector<Cinema> BookingClient::GetCinemaList() 
+std::vector<Theater> BookingClient::GetTheaterList() 
 {
-    return gBackend.GetCinemaList();
+    return iImpl->GetTheaterList();
 }
 
-bool BookingClient::SelectCinema(const Cinema& aCinema) 
+bool BookingClient::SelectTheater(const Theater& aTheater) 
 {
-    return iImpl->SelectCinema(aCinema);
+    return iImpl->SelectTheater(aTheater);
 }
 
-bool BookingClient::SelectMovie(const Mouvie& aMovie)
+bool BookingClient::SelectMovie(const Movie& aMovie)
 {
     return iImpl->SelectMovie(aMovie);
 }

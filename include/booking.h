@@ -11,7 +11,7 @@ namespace booking{
  * @brief represents a cinema 
  * in future we might want to add other specialization such as address, phone, etc 
  */
-struct Cinema{
+struct Theater{
     std::string iName;
 };
 
@@ -19,12 +19,12 @@ struct Cinema{
  * @brief represents a mouvie 
  * in future we might want to add other specialization such as lenght, director, etc 
  */
-struct Mouvie{
+struct Movie{
     std::string iName;
 };
 
-inline int operator < (const Mouvie& aLhs, const Mouvie& aRhs) {return aLhs.iName < aRhs.iName;}
-inline int operator < (const Cinema& aLhs, const Cinema& aRhs) {return aLhs.iName < aRhs.iName;}
+inline int operator < (const Movie& aLhs, const Movie& aRhs) {return aLhs.iName < aRhs.iName;}
+inline int operator < (const Theater& aLhs, const Theater& aRhs) {return aLhs.iName < aRhs.iName;}
 /**
  * @brief represents a mouvie 
  * in future we might want to add other specialization such as price 
@@ -40,8 +40,8 @@ enum class EBookingResult
     EServerError, ///http 5xx
     ENoSeatsAvailable, /// no seats available
     EBadArg,       /// bad argument say wrong number of seats requested
-    ENoSuchMouvie, /// wrong mouvie
-    ENoSuchCinema  /// wrong cinema name
+    ENoSuchMovie, /// wrong mouvie
+    ENoSuchTheater  /// wrong cinema name
 };
 
 //forward declaration of an implementation class
@@ -54,27 +54,34 @@ class BookingClientImpl;
 class BookingClient
 {
 public:
-     /// @brief get a list of movies currently available in cinemas 
-     /// @return 
-    static std::vector<Mouvie> GetMouvieList();
+     /// @brief if no mouvie selected yet it returns a list of all theatres,
+     ///        otherwise only ones showing the mouvie 
+     /// @return a list of theathres
+    std::vector<Theater> GetTheaterList(); 
 
-     /// @brief get a list of cinemas
-     /// @return 
-    static std::vector<Cinema> GetCinemaList(); 
+     /// @brief get a list of movies currently available in all cinemas, 
+     ///        if cinema is selectad it returns a list of mouvies shown in this particular cinema
+     /// @return a list of mouvies
+    std::vector<Movie> GetMovieList();
 
-     /// @brief select Cinema for further operations
+     /// @brief select Theater for further operations
      /// @return 
-    bool SelectCinema(const Cinema& aCinema);
-     /// @brief 
-     /// @return 
-    bool SelectMovie(const Mouvie& aMovie);
-     /// @brief returns a list of available seats for previously set Cinema and Mouvie
+    bool SelectTheater(const Theater& aTheater);
+
+     /// @brief selects mouvie for further operations
+     /// @param aMovie movie to select
+     /// @return true if success otherwise false
+    bool SelectMovie(const Movie& aMovie);
+
+     /// @brief returns a list of available seats for previously set Theater and Movie
      /// @return 
     std::vector<Seat> GetAvailableSeats() const;
+
      /// @brief actually books tickets
      /// @param aNumberOfTickets number of tickets to book
      /// @return see \@EBookingResult
     EBookingResult BookTickets(unsigned aNumberOfTickets);
+
      /// @brief factory method
      /// @return  new client, bound to a backend
     static std::unique_ptr<BookingClient> New();
